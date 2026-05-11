@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام نتائج الطلاب</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <h1>مدرسة الشيخ جلته العربية</h1>
+        <h2>إدخال درجات الطلاب</h2>
+    </header>
+
+    <main>
+        <form id="student-form">
+            
+            <!-- معلومات الطالب -->
+            <fieldset>
+                <legend>معلومات الطالب</legend>
+                
+                <label>اسم الطالب</label>
+                <input type="text" id="name" required>
+
+                <label>الجنس</label>
+                <select id="gender">
+                    <option value="male">ذكر</option>
+                    <option value="female" selected>أنثى</option>
+                </select><br />
+
+                <label>الفترة الدراسية</label>
+                <select id="semester">
+                    <option value="الاولى">الفترة الأولى</option>
+                    <option value="الثانية">الفترة الثانية</option>
+                    <option value="الاخيرة">الفترة الثالثة</option>
+                </select>
+                
+                <label>العام الدراسي </label>
+                <select id="">
+                    <option value="2025-2026">2025-2026</option>
+                    <option value="2026-2027">2026-2027</option>
+                    <option value="2027-2028">2027-2028</option>
+                </select>
+
+            </fieldset>
+
+            <!-- الدرجات -->
+            <fieldset>
+                <legend>الدرجات</legend>
+
+                <label>التربية الإسلامية (من 30)</label>
+                <input type="number" id="islamic" min="0" max="30" required><br>
+
+                <label>اللغة العربية (من 20)</label>
+                <input type="number" id="arabic" min="0" max="20" required><br>
+
+                <label>الحساب (من 20)</label>
+                <input type="number" id="math" min="0" max="20" required><br>
+
+                <label>العلوم (من 10)</label>
+                <input type="number" id="science" min="0" max="10" required><br>
+
+                <label>التربية الوطنية (من 10)</label>
+                <input type="number" id="civic" min="0" max="10" required><br>
+
+                <label>اللغة الفرنسية (من 10)</label>
+                <input type="number" id="french" min="0" max="10" required><br>
+
+                <label>التربية البدنية (من 10)</label>
+                <input type="number" id="sport" min="0" max="10" required><br>
+
+                <label>الفنون (من 10)</label>
+                <input type="number" id="art" min="0" max="10" required><br>
+
+                <label>السلوك والمواطنية (من 10)</label>
+                <input type="number" id="conduct" min="0" max="10" required><br>
+            </fieldset>
+
+            <button type="submit">احسب وحفظ</button>
+        </form>
+    </main>
+
+   <script src="js/main.js" type="text/javascript" charset="utf-8"></script>
+</body>
+</html>

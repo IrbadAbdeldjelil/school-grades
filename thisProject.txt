@@ -1,0 +1,444 @@
+FILE : package.json
+CONTENT : {
+  "name": "school-grades",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
+
+FILE : server.js
+CONTENT : require('dotenv').config();
+const app = require('./src/app');
+const sequelize = require('./src/config/db.config');
+
+const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || 'localhost';
+
+const start = async () => {
+    try {
+        await sequelize.authenticate();
+        console.log('✅ قاعدة البيانات متصلة');
+
+        await sequelize.sync({ alter: true });
+        console.log('✅ الجداول جاهزة');
+
+        app.listen(PORT, () => {
+            console.log(`🚀 السيرفر يعمل على http://${HOST}:${PORT}`);
+        });
+
+    } catch (error) {
+        console.error('❌ خطأ:', error.message);
+        process.exit(1);
+    }
+};
+
+start();
+
+FILE : frontend/index.html
+CONTENT : <!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام نتائج الطلاب</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <h1>مدرسة الشيخ جلته العربية</h1>
+        <h2>إدخال درجات الطلاب</h2>
+    </header>
+
+    <main>
+        <form id="student-form">
+            
+            <!-- معلومات الطالب -->
+            <fieldset>
+                <legend>معلومات الطالب</legend>
+                
+                <label>اسم الطالب</label>
+                <input type="text" id="name" required>
+
+                <label>الجنس</label>
+                <select id="gender">
+                    <option value="male">ذكر</option>
+                    <option value="female" selected>أنثى</option>
+                </select><br />
+
+                <label>الفترة الدراسية</label>
+                <select id="semester">
+                    <option value="الاولى">الفترة الأولى</option>
+                    <option value="الثانية">الفترة الثانية</option>
+                    <option value="الاخيرة">الفترة الثالثة</option>
+                </select>
+
+            </fieldset>
+
+            <!-- الدرجات -->
+            <fieldset>
+                <legend>الدرجات</legend>
+
+                <label>التربية الإسلامية (من 30)</label>
+                <input type="number" id="islamic" min="0" max="30" required><br>
+
+                <label>اللغة العربية (من 20)</label>
+                <input type="number" id="arabic" min="0" max="20" required><br>
+
+                <label>الحساب (من 20)</label>
+                <input type="number" id="math" min="0" max="20" required><br>
+
+                <label>العلوم (من 10)</label>
+                <input type="number" id="science" min="0" max="10" required><br>
+
+                <label>التربية الوطنية (من 10)</label>
+                <input type="number" id="civic" min="0" max="10" required><br>
+
+                <label>اللغة الفرنسية (من 10)</label>
+                <input type="number" id="french" min="0" max="10" required><br>
+
+                <label>التربية البدنية (من 10)</label>
+                <input type="number" id="sport" min="0" max="10" required><br>
+
+                <label>الفنون (من 10)</label>
+                <input type="number" id="art" min="0" max="10" required><br>
+
+                <label>السلوك والمواطنية (من 10)</label>
+                <input type="number" id="conduct" min="0" max="10" required><br>
+            </fieldset>
+
+            <button type="submit">احسب وحفظ</button>
+        </form>
+    </main>
+
+   <script src="js/main.js" type="text/javascript" charset="utf-8"></script>
+</body>
+</html>
+
+FILE : src/app.js
+CONTENT : const express = require('express');
+const morgan = require('morgan');
+const helmet = require('helmet');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+const path = require('path');
+
+const isDev = process.env.NODE_ENV === 'development';
+const gradesRoutes = require('./routes/grades.routes');
+
+const app = express();
+
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: 'too many requests from this IP'
+});
+
+// Middleware
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(limiter);
+if (isDev) {
+app.use(morgan('tiny'));
+}
+
+// Static files
+app.use(express.static(path.join(__dirname, '../frontend')));
+
+// Routes
+app.use('/api/v1/grades', gradesRoutes);
+
+// 404
+app.use((req, res) => {
+    res.status(404).json({
+        success: false,
+        message: 'المسار غير موجود'
+    });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+	 console.log(err.stack);
+    res.status(500).json({
+        success: false,
+        message: process.env.NODE_ENV === 'development' 
+            ? err.message 
+            : 'حدث خطأ في السيرفر'
+    });
+});
+
+module.exports = app;
+
+FILE : frontend/js/main.js
+CONTENT : 'use strict';
+
+document.getElementById('student-form')
+  .addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const data = {
+        name:      document.getElementById('name').value,
+        gender:    document.getElementById('gender').value,
+        semester:  document.getElementById('semester').value,
+        grades: {
+            islamic: +document.getElementById('islamic').value,
+            arabic:  +document.getElementById('arabic').value,
+            math:    +document.getElementById('math').value,
+            science: +document.getElementById('science').value,
+            civic:   +document.getElementById('civic').value,
+            french:  +document.getElementById('french').value,
+            sport:   +document.getElementById('sport').value,
+            art:     +document.getElementById('art').value,
+            conduct: +document.getElementById('conduct').value,
+        }
+    };
+
+    const res = await fetch('/api/v1/grades', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+
+    const result = await res.json();
+    
+    if (result.success) {
+        // انتقل لصفحة النتيجة
+        window.location.href = `/result.html?id=${result.data.id}`;
+    } else {
+        alert(result.message);
+    }
+});
+
+FILE : src/config/db.config.js
+CONTENT : const { Sequelize } = require('sequelize');
+require('dotenv').config();
+
+const isDev = process.env.NODE_ENV === 'development';
+
+const sequelize = new Sequelize(process.env.DATABASE_URL, {
+    dialect: process.env.DB_TYPE,
+    dialectOptions: {
+        ssl: isDev ? false : {
+            require: true,
+            rejectUnauthorized: false
+        }
+    },
+    logging: false
+});
+
+module.exports = sequelize;
+
+FILE : src/controllers/grades.controller.js
+CONTENT : const Grade = require('../models/grade.model');
+const { calculate } = require('../helpers/calculate');
+const { gradeSchema } = require('../helpers/validation');
+
+const createGrade = async (req, res, next) => {
+    try {
+	     const parsed = gradeSchema.safeParse(req.body);
+       if (!parsed.success) return res.status(400).json({
+            success: false,
+            message: parsed.error.errors[0].message
+        });
+        const {
+            name,
+            gender,
+            semester,
+            academicYear,
+            grades
+        } = parsed.data;
+
+        // حساب النتيجة
+        const { total, average, result, mention } = calculate(grades);
+
+        // حفظ في DB
+        const grade = await Grade.create({
+            name,
+            gender,
+            semester,
+            academicYear,
+            islamic:  grades.islamic,
+            arabic:   grades.arabic,
+            math:     grades.math,
+            science:  grades.science,
+            civic:    grades.civic,
+            french:   grades.french,
+            sport:    grades.sport,
+            art:      grades.art,
+            conduct:  grades.conduct,
+            total,
+            average,
+            result,
+            mention
+        });
+
+        res.status(201).json({
+            success: true,
+            message: 'تم حفظ الدرجات بنجاح',
+            data: { id: grade.id }
+        });
+
+    } catch (error) {
+        next(error);
+    }
+};
+
+const getAllGrades = async (req, res, next) => {
+    try {
+        const grades = await Grade.findAll({
+            order: [['average', 'DESC']]
+        });
+
+        res.status(200).json({
+            success: true,
+            data: grades
+        });
+
+    } catch (error) {
+        next(error);
+    }
+};
+
+const getGrade = async (req, res, next) => {
+    try {
+      const { id } = req.params;
+        
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(id)) return res.status(400).json({
+            success: false,
+            message: 'معرف غير صالح'
+        });
+
+        const grade = await Grade.findByPk(id);
+        if (!grade) return res.status(404).json({
+            success: false,
+            message: 'الطالب غير موجود'
+        });
+
+        res.status(200).json({
+            success: true,
+            data: grade
+        });
+
+    } catch (error) {
+        next(error);
+    }
+};
+
+module.exports = { createGrade, getAllGrades, getGrade };
+
+FILE : src/helpers/calculate.js
+CONTENT : function calculate(grades) {
+    const { islamic, arabic, math, science, civic, french, sport, art, conduct } = grades;
+
+    const total = islamic + arabic + math + science + civic + french + sport + art + conduct;
+    const average = +(total / 13).toFixed(2);
+    const result = average >= 5 ? 'نجاح' : 'رسوب';
+
+    let mention = '';
+    if (average >= 9)      mention = 'ممتاز';
+    else if (average >= 8) mention = 'جيد جداً';
+    else if (average >= 7) mention = 'جيد';
+    else if (average >= 6) mention = 'حسن';
+    else if (average >= 5) mention = 'مقبول';
+    else                   mention = 'ضعيف';
+
+    return { total, average, result, mention };
+}
+
+module.exports = { calculate };
+
+FILE : src/helpers/validation.js
+CONTENT : const { z } = require('zod');
+
+const gradeSchema = z.object({
+    name:         z.string().min(1, 'اسم الطالب مطلوب'),
+    gender:       z.enum(['male', 'female']),
+    semester:     z.enum(['الاولى', 'الثانية', 'الاخيرة']),
+    academicYear: z.string().regex(/^\d{4}-\d{4}$/, 'مثال: 2025-2026'),
+    grades: z.object({
+        islamic:  z.number().min(0).max(30),
+        arabic:   z.number().min(0).max(20),
+        math:     z.number().min(0).max(20),
+        science:  z.number().min(0).max(10),
+        civic:    z.number().min(0).max(10),
+        french:   z.number().min(0).max(10),
+        sport:    z.number().min(0).max(10),
+        art:      z.number().min(0).max(10),
+        conduct:  z.number().min(0).max(10),
+    })
+});
+
+module.exports = { gradeSchema };
+
+FILE : src/models/grade.model.js
+CONTENT : const { DataTypes } = require('sequelize');
+const sequelize = require('../config/db.config');
+
+const Grade = sequelize.define('Grade', {
+    id: {
+        type: DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey: true
+    },
+    name: {
+        type: DataTypes.STRING,
+        allowNull: false
+    },
+    gender: {
+        type: DataTypes.ENUM('male', 'female'),
+        allowNull: false
+    },
+    semester: {
+        type: DataTypes.ENUM('الاولى', 'الثانية', 'الاخيرة'),
+        allowNull: false
+    },
+    academicYear: {
+    type: DataTypes.STRING,
+    allowNull: false
+    // مثال: '2025-2026'
+},
+    islamic:  { type: DataTypes.INTEGER, allowNull: false },
+    arabic:   { type: DataTypes.INTEGER, allowNull: false },
+    math:     { type: DataTypes.INTEGER, allowNull: false },
+    science:  { type: DataTypes.INTEGER, allowNull: false },
+    civic:    { type: DataTypes.INTEGER, allowNull: false },
+    french:   { type: DataTypes.INTEGER, allowNull: false },
+    sport:    { type: DataTypes.INTEGER, allowNull: false },
+    art:      { type: DataTypes.INTEGER, allowNull: false },
+    conduct:  { type: DataTypes.INTEGER, allowNull: false },
+    total:    { type: DataTypes.FLOAT,   allowNull: false },
+    average:  { type: DataTypes.FLOAT,   allowNull: false },
+    result:   { type: DataTypes.STRING,  allowNull: false },
+    mention:  { type: DataTypes.STRING,  allowNull: false },
+    rank:     { type: DataTypes.INTEGER, allowNull: true  },
+});
+
+module.exports = Grade;
+
+FILE : src/routes/grades.routes.js
+CONTENT : const { Router } = require('express');
+const { createGrade, getAllGrades, getGrade } = require('../controllers/grades.controller');
+const path = require('path');
+
+const router = Router();
+
+router.get('/input', (req, res, next) => {
+	res.render('index');
+})
+router.post('/',     createGrade);
+router.get('/',      getAllGrades);
+router.get('/:id',   getGrade);
+
+module.exports = router;
+
