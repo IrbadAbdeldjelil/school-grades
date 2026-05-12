@@ -31,10 +31,8 @@ document.getElementById('student-form')
     const result = await res.json();
     
     if (result.success) {
-        // انتقل لصفحة النتيجة
-        window.location.href = `/certificates.html`;
+       alert(result.message);
     } else {
         alert(result.message);
     }
 });
-    

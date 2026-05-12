@@ -18,4 +18,9 @@ const gradeSchema = z.object({
     })
 });
 
-module.exports = { gradeSchema };
+ const certSchema = z.object({
+            semester:     z.enum(['الاولى', 'الثانية', 'الاخيرة']),
+            academicYear: z.string().regex(/^\d{4}-\d{4}$/),
+            issueDate:    z.string().min(1)
+        });
+module.exports = { gradeSchema, certSchema };

@@ -16,4 +16,22 @@ function calculate(grades) {
     return { total, average, result, mention };
 }
 
-module.exports = { calculate };
+const calculateRanks = async (Grade, semester, academicYear) => {
+       
+
+        const grades = await Grade.findAll({
+            where: { semester, academicYear },
+            order: [['average', 'DESC']]
+        });
+
+        let rank = 1;
+        for (let i = 0; i < grades.length; i++) {
+            // إذا كان المعدل مختلفاً عن السابق — غيّر الترتيب
+            if (i > 0 && grades[i].average < grades[i - 1].average) {
+                rank = i + 1;
+            }
+            await grades[i].update({ rank });
+        }
+
+};
+module.exports = { calculate, calculateRanks };
