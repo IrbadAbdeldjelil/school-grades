@@ -1,0 +1,146 @@
+<!DOCTYPE html><html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نظام إدخال درجات</title>
+</head>
+<body>
+  <div id="app"></div>  <script>
+    // State
+    const state = {
+      className: '',
+      term: '',
+      students: [],
+      currentIndex: 0,
+      grades: {}
+    };
+
+    function render() {
+      const app = document.getElementById('app');
+
+      // Screen 1: setup
+      if (!state.className || !state.term) {
+        app.innerHTML = `
+          <h2>اختيار الصف والفترة</h2>
+          <label>الصف</label>
+          <select id="classSelect">
+            <option value="">-- اختر --</option>
+            <option>الأولى</option>
+            <option>الثانية</option>
+          </select><br><br>
+
+          <label>الفترة</label>
+          <select id="termSelect">
+            <option value="">-- اختر --</option>
+            <option>الأولى</option>
+            <option>الثانية</option>
+          </select><br><br>
+
+          <button onclick="saveSetup()">التالي</button>
+        `;
+        return;
+      }
+
+      // Screen 2: load students
+      if (state.students.length === 0) {
+        app.innerHTML = `
+          <h2>إدخال أسماء الطلاب</h2>
+          <textarea id="studentsInput" rows="10" cols="30" placeholder="طالب في كل سطر"></textarea><br><button onclick="loadStudents()">تحميل الطلاب</button>
+    `;
+    return;
+  }
+
+  // Screen 3: grade entry
+  const student = state.students[state.currentIndex];
+  app.innerHTML = `
+    <h2>${student} (${state.currentIndex + 1}/${state.students.length})</h2>
+
+    <div>
+      <label>إسلامية</label>
+      <input id="islamic" type="number"><br>
+
+      <label>عربية</label>
+      <input id="arabic" type="number"><br>
+
+      <label>حساب</label>
+      <input id="math" type="number"><br>
+
+      <label>علوم</label>
+      <input id="science" type="number"><br><br>
+    </div>
+
+    <button onclick="saveAndNext()">حفظ والطالب التالي</button>
+    <button onclick="previousStudent()">السابق</button>
+    <button onclick="showSummary()">إنهاء</button>
+  `;
+
+  // refill if exists
+  const g = state.grades[student];
+  if (g) {
+    setTimeout(() => {
+      document.getElementById('islamic').value = g.islamic || '';
+      document.getElementById('arabic').value = g.arabic || '';
+      document.getElementById('math').value = g.math || '';
+      document.getElementById('science').value = g.science || '';
+    }, 0);
+  }
+}
+
+function saveSetup() {
+  state.className = document.getElementById('classSelect').value;
+  state.term = document.getElementById('termSelect').value;
+  render();
+}
+
+function loadStudents() {
+  const raw = document.getElementById('studentsInput').value;
+  state.students = raw.split('\n').map(x => x.trim()).filter(Boolean);
+  render();
+}
+
+function saveAndNext() {
+  const student = state.students[state.currentIndex];
+  state.grades[student] = {
+    islamic: document.getElementById('islamic').value,
+    arabic: document.getElementById('arabic').value,
+    math: document.getElementById('math').value,
+    science: document.getElementById('science').value,
+  };
+
+  localStorage.setItem('grades', JSON.stringify(state.grades));
+
+  if (state.currentIndex < state.students.length - 1) {
+    state.currentIndex++;
+    render();
+  } else {
+    showSummary();
+  }
+}
+
+function previousStudent() {
+  if (state.currentIndex > 0) {
+    state.currentIndex--;
+    render();
+  }
+}
+
+function showSummary() {
+  const app = document.getElementById('app');
+  app.innerHTML = '<h2>ملخص</h2>' +
+    '<pre>' + JSON.stringify(state.grades, null, 2) + '</pre>' +
+    '<button onclick="downloadJson()">تنزيل JSON</button>';
+}
+
+function downloadJson() {
+  const blob = new Blob([JSON.stringify(state.grades)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'grades.json';
+  a.click();
+}
+
+render();
+
+  </script>
+</body>
+</html>

@@ -4,7 +4,7 @@ const Grade = require('../models/grade.model');
 const { calculate, calculateRanks } = require('../helpers/calculate');
 const { gradeSchema, certSchema } = require('../helpers/validation');
 const { generateCertificates } = require('../helpers/generate');
-
+const { tkwinShahadat } = require('../helpers/tkwinShahadat')
 const createGrade = async (req, res, next) => {
     
 	     const parsed = gradeSchema.safeParse(req.body);
@@ -97,7 +97,11 @@ const generateCertificatesHandler = async (req, res, next) => {
         if (!parsed.success) return next(parsed.error);
          
         const { semester, academicYear, issueDate } = parsed.data;
-        await calculateRanks(Grade, semester, academicYear);
+        const gradesNotRank = await Grade.findAll({
+            where: { semester, academicYear },
+            order: [['average', 'DESC']]
+        });
+        await calculateRanks(gradesNotRank);
         const grades = await Grade.findAll({
             where: { semester, academicYear },
             order: [['rank', 'ASC']]
@@ -108,12 +112,13 @@ const generateCertificatesHandler = async (req, res, next) => {
             message: 'لا يوجد طلاب في هذه الفترة'
         });
 
-        const doc = generateCertificates(
-            grades.map(g => g.dataValues),
-            issueDate
-        );
+        // const doc = generateCertificates(
+        //     grades.map(g => g.dataValues),
+        //     issueDate
+        // );
 
-        const buffer = await Packer.toBuffer(doc);
+        const buffer = tkwinShahadat(grades.map(g=>g.dataValues));
+        //const buffer = await Packer.toBuffer(doc);
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
         res.setHeader('Content-Disposition', `attachment; filename=certificates.docx`);

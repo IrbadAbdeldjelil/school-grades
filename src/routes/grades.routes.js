@@ -6,6 +6,6 @@ const router = Router();
 router.post('/',     createGrade);
 router.get('/',      getAllGrades);
 router.get('/:id',   getGrade);
-router.post('/certificates', calculateRanks, generateCertificatesHandler);
+router.post('/certificates', generateCertificatesHandler);
 
 module.exports = router;

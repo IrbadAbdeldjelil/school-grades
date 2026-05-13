@@ -1,3 +1,8 @@
+FILE : .gitignore
+CONTENT : node_modules
+.env
+thisProject.txt
+
 FILE : package.json
 CONTENT : {
   "name": "school-grades",
@@ -43,6 +48,48 @@ const start = async () => {
 
 start();
 
+FILE : frontend/certificates.html
+CONTENT : <!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>توليد الشهادات</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <h1>مدرسة الشيخ جلته العربية</h1>
+        <h2>توليد الشهادات</h2>
+    </header>
+
+    <main>
+        <form id="cert-form">
+            <fieldset>
+                <legend>بيانات الشهادات</legend>
+
+                <label>الفترة الدراسية</label>
+                <select id="semester">
+                    <option value="الاولى">الفترة الأولى</option>
+                    <option value="الثانية">الفترة الثانية</option>
+                    <option value="الاخيرة">الفترة الثالثة</option>
+                </select>
+
+                <label>العام الدراسي</label>
+                <input type="text" id="academicYear" placeholder="2025-2026" required>
+
+                <label>تاريخ الإصدار</label>
+                <input type="date" id="issueDate" required>
+            </fieldset>
+
+            <button type="submit">توليد الشهادات</button>
+        </form>
+    </main>
+
+    <script src="js/certificates.js"></script>
+</body>
+</html>
+
 FILE : frontend/index.html
 CONTENT : <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -79,6 +126,13 @@ CONTENT : <!DOCTYPE html>
                     <option value="الاولى">الفترة الأولى</option>
                     <option value="الثانية">الفترة الثانية</option>
                     <option value="الاخيرة">الفترة الثالثة</option>
+                </select>
+                
+                <label>العام الدراسي </label>
+                <select id="academicYear">
+                    <option value="2025-2026">2025-2026</option>
+                    <option value="2026-2027">2026-2027</option>
+                    <option value="2027-2028">2027-2028</option>
                 </select>
 
             </fieldset>
@@ -128,6 +182,7 @@ CONTENT : const express = require('express');
 const morgan = require('morgan');
 const helmet = require('helmet');
 const cors = require('cors');
+const { ZodError} = require('zod')
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 
@@ -166,18 +221,76 @@ app.use((req, res) => {
     });
 });
 
-// Error handler
-app.use((err, req, res, next) => {
-	 console.log(err.stack);
-    res.status(500).json({
+// error handler
+app.use(function (err, req, res, next) {
+     if (isDev) {
+      console.error(err.stack)
+     }
+
+    let statusCode = err.status || 500;
+    let message = err.message || 'Something broke!';
+    
+    // validation errors
+    if (err instanceof ZodError) {
+        return res.status(400).json({
+            success: false,
+            statusCode: 400,
+            message: 'validation errors',
+            data: null,
+            errors: err.issues.map(e=> ({
+                field: e.path.join('.'),
+                message: e.message
+            })),
+            time: new Date().toISOString() 
+        })
+    }
+
+    return res.status(statusCode).json({
         success: false,
-        message: process.env.NODE_ENV === 'development' 
-            ? err.message 
-            : 'حدث خطأ في السيرفر'
+        statusCode,
+        message,
+        data: null,
+        errors: null,
+        time: new Date().toISOString()
     });
 });
 
+
 module.exports = app;
+
+FILE : frontend/js/certificates.js
+CONTENT : // certificate
+document.getElementById('cert-form')
+.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const data = {
+                    semester:     document.getElementById('semester').value,
+                    academicYear: document.getElementById('academicYear').value,
+                    issueDate:    document.getElementById('issueDate').value,
+                };
+
+                try {
+                        const res = await fetch('/api/v1/grades/certificates', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        });
+        
+                            const blob = await res.blob();
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = ` شهادات الفترة-${data.semester}-${data.academicYear}.docx`;
+                            a.click();
+                        
+                    } catch (error) {
+                        
+                        console.log(error);                      
+                        alert('certificates ERROR:', error);
+                    }
+                }
+            )
 
 FILE : frontend/js/main.js
 CONTENT : 'use strict';
@@ -190,6 +303,7 @@ document.getElementById('student-form')
         name:      document.getElementById('name').value,
         gender:    document.getElementById('gender').value,
         semester:  document.getElementById('semester').value,
+        academicYear:  document.getElementById('academicYear').value,
         grades: {
             islamic: +document.getElementById('islamic').value,
             arabic:  +document.getElementById('arabic').value,
@@ -212,8 +326,7 @@ document.getElementById('student-form')
     const result = await res.json();
     
     if (result.success) {
-        // انتقل لصفحة النتيجة
-        window.location.href = `/result.html?id=${result.data.id}`;
+       alert(result.message);
     } else {
         alert(result.message);
     }
@@ -239,17 +352,18 @@ const sequelize = new Sequelize(process.env.DATABASE_URL, {
 module.exports = sequelize;
 
 FILE : src/controllers/grades.controller.js
-CONTENT : const Grade = require('../models/grade.model');
-const { calculate } = require('../helpers/calculate');
-const { gradeSchema } = require('../helpers/validation');
+CONTENT : const { z }  = require('zod');
+const { Packer} = require('docx');
+const Grade = require('../models/grade.model');
+const { calculate, calculateRanks } = require('../helpers/calculate');
+const { gradeSchema, certSchema } = require('../helpers/validation');
+const { generateCertificates } = require('../helpers/generate');
 
 const createGrade = async (req, res, next) => {
-    try {
+    
 	     const parsed = gradeSchema.safeParse(req.body);
-       if (!parsed.success) return res.status(400).json({
-            success: false,
-            message: parsed.error.errors[0].message
-        });
+       if (!parsed.success) return next(parsed.error);
+
         const {
             name,
             gender,
@@ -281,37 +395,34 @@ const createGrade = async (req, res, next) => {
             result,
             mention
         });
-
+        
+        //console.log(grade);
+        
         res.status(201).json({
             success: true,
             message: 'تم حفظ الدرجات بنجاح',
             data: { id: grade.id }
         });
 
-    } catch (error) {
-        next(error);
-    }
 };
 
 const getAllGrades = async (req, res, next) => {
-    try {
+    
         const grades = await Grade.findAll({
             order: [['average', 'DESC']]
         });
 
         res.status(200).json({
             success: true,
+            message: 'جميع درجات الطلاب',
             data: grades
         });
 
-    } catch (error) {
-        next(error);
-    }
 };
 
 const getGrade = async (req, res, next) => {
-    try {
-      const { id } = req.params;
+
+        const { id } = req.params;
         
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
         if (!uuidRegex.test(id)) return res.status(400).json({
@@ -327,15 +438,44 @@ const getGrade = async (req, res, next) => {
 
         res.status(200).json({
             success: true,
+            message: 'تم ايجاد الطالب بنجاح',
             data: grade
         });
 
-    } catch (error) {
-        next(error);
-    }
 };
 
-module.exports = { createGrade, getAllGrades, getGrade };
+
+const generateCertificatesHandler = async (req, res, next) => {
+       
+        const parsed = certSchema.safeParse(req.body);
+        if (!parsed.success) return next(parsed.error);
+         
+        const { semester, academicYear, issueDate } = parsed.data;
+        await calculateRanks(Grade, semester, academicYear);
+        const grades = await Grade.findAll({
+            where: { semester, academicYear },
+            order: [['rank', 'ASC']]
+        });
+
+        if (!grades.length) return res.status(404).json({
+            success: false,
+            message: 'لا يوجد طلاب في هذه الفترة'
+        });
+
+        const doc = generateCertificates(
+            grades.map(g => g.dataValues),
+            issueDate
+        );
+
+        const buffer = await Packer.toBuffer(doc);
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename=certificates.docx`);
+        res.send(buffer);
+
+    };
+
+module.exports = { createGrade, getAllGrades, getGrade, calculateRanks, generateCertificatesHandler };
 
 FILE : src/helpers/calculate.js
 CONTENT : function calculate(grades) {
@@ -356,7 +496,128 @@ CONTENT : function calculate(grades) {
     return { total, average, result, mention };
 }
 
-module.exports = { calculate };
+const calculateRanks = async (Grade, semester, academicYear) => {
+       
+
+        const grades = await Grade.findAll({
+            where: { semester, academicYear },
+            order: [['average', 'DESC']]
+        });
+
+        let rank = 1;
+        for (let i = 0; i < grades.length; i++) {
+            // إذا كان المعدل مختلفاً عن السابق — غيّر الترتيب
+            if (i > 0 && grades[i].average < grades[i - 1].average) {
+                rank = i + 1;
+            }
+            await grades[i].update({ rank });
+        }
+
+};
+module.exports = { calculate, calculateRanks };
+
+FILE : src/helpers/generate.js
+CONTENT : const { Document, Paragraph, Table, TableRow, TableCell, TextRun, AlignmentType, WidthType, PageBreak } = require('docx');
+
+function generateCertificates(students, issueDate) {
+    const sections = [];
+
+    students.forEach((student, index) => {
+        const isMale = student.gender === 'male';
+        const note = isMale
+            ? 'حسن السير والسلوك مواظب على دروسه نتمنى له النجاح'
+            : 'حسنة السير والسلوك مواظبة على دروسها نتمنى لها النجاح';
+
+        const children = [
+            new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: 'كشف الدرجات', bold: true, size: 40 })]
+            }),
+            new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: 'مدرسة الشيخ جلته العربية', size: 28 })]
+            }),
+            new Paragraph({ text: '' }),
+            new Paragraph({
+                children: [new TextRun({ text: `اسم الطالب: ${student.name}` })]
+            }),
+            new Paragraph({
+                children: [new TextRun({ text: `الفترة: ${student.semester}  |  العام الدراسي: ${student.academicYear}` })]
+            }),
+            new Paragraph({ text: '' }),
+
+            new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                rows: [
+                    headerRow(),
+                    row('التربية الإسلامية', 30, student.islamic),
+                    row('اللغة العربية', 20, student.arabic),
+                    row('الحساب', 20, student.math),
+                    row('العلوم', 10, student.science),
+                    row('التربية الوطنية', 10, student.civic),
+                    row('اللغة الفرنسية', 10, student.french),
+                    row('التربية البدنية', 10, student.sport),
+                    row('الفنون', 10, student.art),
+                    row('السلوك والمواطنية', 10, student.conduct),
+                    row('المجموع', 130, student.total),
+                ]
+            }),
+
+            new Paragraph({ text: '' }),
+            new Paragraph({ children: [new TextRun({ text: `المعدل: ${student.average} / 10` })] }),
+            new Paragraph({ children: [new TextRun({ text: `النتيجة: ${student.result}` })] }),
+            new Paragraph({ children: [new TextRun({ text: `التقدير: ${student.mention}` })] }),
+            new Paragraph({ children: [new TextRun({ text: `الترتيب: ${student.rank}` })] }),
+            new Paragraph({ text: '' }),
+            new Paragraph({ children: [new TextRun({ text: `ملاحظات المرشد: ${note}` })] }),
+            new Paragraph({ children: [new TextRun({ text: `تاريخ الإصدار: ${issueDate}` })] }),
+        ];
+
+        // فاصل صفحة بعد كل طالب إلا الأخير
+        if (index < students.length - 1) {
+            children.push(new Paragraph({
+                children: [new PageBreak()]
+            }));
+        }
+
+        sections.push(...children);
+    });
+
+    return new Document({
+        sections: [{ children: sections }]
+    });
+}
+
+function headerRow() {
+    return new TableRow({
+        children: [
+            cell('المادة', true),
+            cell('الدرجة الكبرى', true),
+            cell('درجة الطالب', true),
+        ]
+    });
+}
+
+function row(subject, max, score) {
+    return new TableRow({
+        children: [
+            cell(subject),
+            cell(String(max)),
+            cell(String(score)),
+        ]
+    });
+}
+
+function cell(text, bold = false) {
+    return new TableCell({
+        children: [new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text, bold })]
+        })]
+    });
+}
+
+module.exports = { generateCertificates };
 
 FILE : src/helpers/validation.js
 CONTENT : const { z } = require('zod');
@@ -379,7 +640,12 @@ const gradeSchema = z.object({
     })
 });
 
-module.exports = { gradeSchema };
+ const certSchema = z.object({
+            semester:     z.enum(['الاولى', 'الثانية', 'الاخيرة']),
+            academicYear: z.string().regex(/^\d{4}-\d{4}$/),
+            issueDate:    z.string().min(1)
+        });
+module.exports = { gradeSchema, certSchema };
 
 FILE : src/models/grade.model.js
 CONTENT : const { DataTypes } = require('sequelize');
@@ -428,17 +694,14 @@ module.exports = Grade;
 
 FILE : src/routes/grades.routes.js
 CONTENT : const { Router } = require('express');
-const { createGrade, getAllGrades, getGrade } = require('../controllers/grades.controller');
-const path = require('path');
+const { createGrade, getAllGrades, getGrade, calculateRanks, generateCertificatesHandler } = require('../controllers/grades.controller');
 
 const router = Router();
 
-router.get('/input', (req, res, next) => {
-	res.render('index');
-})
 router.post('/',     createGrade);
 router.get('/',      getAllGrades);
 router.get('/:id',   getGrade);
+router.post('/certificates', calculateRanks, generateCertificatesHandler);
 
 module.exports = router;
 

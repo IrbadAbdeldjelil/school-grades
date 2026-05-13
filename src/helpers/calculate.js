@@ -1,3 +1,5 @@
+const {Grade} = require('../models/grade.model.js');
+
 function calculate(grades) {
     const { islamic, arabic, math, science, civic, french, sport, art, conduct } = grades;
 
@@ -16,14 +18,8 @@ function calculate(grades) {
     return { total, average, result, mention };
 }
 
-const calculateRanks = async (Grade, semester, academicYear) => {
+const calculateRanks = async (grades) => {
        
-
-        const grades = await Grade.findAll({
-            where: { semester, academicYear },
-            order: [['average', 'DESC']]
-        });
-
         let rank = 1;
         for (let i = 0; i < grades.length; i++) {
             // إذا كان المعدل مختلفاً عن السابق — غيّر الترتيب
